@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Keycloak Demo App</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .btn { padding: 10px 20px; margin: 10px; text-decoration: none; background: #007bff; color: white; border-radius: 5px; }
+        .info { background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Keycloak Demo Application</h1>
+        
+        <% if (user) { %>
+            <div class="info">
+                <h3>Welcome, <%= user.preferred_username %>!</h3>
+                <p>Email: <%= user.email %></p>
+                <p>You are successfully authenticated with Keycloak.</p>
+            </div>
+            <a href="/protected" class="btn">Visit Protected Page</a>
+            <a href="/logout" class="btn" style="background: #dc3545;">Logout</a>
+        <% } else { %>
+            <div class="info">
+                <p>You are not logged in. Click the button below to authenticate with Keycloak.</p>
+            </div>
+            <a href="/protected" class="btn">Login with Keycloak</a>
+        <% } %>
+    </div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "keycloak-demo-app",
+  "version": "1.0.0",
+  "description": "Simple demo app with Keycloak authentication",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "keycloak-connect": "^22.0.0",
+    "ejs": "^3.1.9"
+  },
+  "keywords": ["keycloak", "authentication", "demo"],
+  "author": "IT Engineer",
+  "license": "MIT"
+}

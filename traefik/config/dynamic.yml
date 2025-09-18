@@ -1,0 +1,158 @@
+http:
+  middlewares:
+    # Middleware for secure headers
+    secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+        sslRedirect: true
+        sslHost: ""
+        sslForceHost: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+
+    # Rate limiting middleware
+    rate-limit:
+      rateLimit:
+        burst: 100
+        average: 50
+
+    # Keycloak-specific headers middleware (without X-Frame-Options)
+    keycloak-headers:
+      headers:
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+          X-Forwarded-Port: "443"
+          X-Forwarded-Host: "keycloak.localhost"
+          X-Real-IP: ""
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+          - "X-Forwarded-Proto"
+          - "X-Forwarded-Port"
+
+    # Keycloak-specific secure headers (without frameDeny)
+    keycloak-secure-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - OPTIONS
+          - PUT
+          - POST
+          - DELETE
+        accessControlMaxAge: 100
+        hostsProxyHeaders:
+          - "X-Forwarded-Host"
+        referrerPolicy: "same-origin"
+        sslRedirect: true
+        sslHost: ""
+        sslForceHost: true
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+    cors-headers:
+      headers:
+        accessControlAllowOriginList:
+          - "https://*.${DOMAIN}"
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "authorization"
+          - "content-type"
+        accessControlExposeHeaders:
+          - "authorization"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 100
+        addVaryHeader: true
+
+  # Services and routers
+  routers:
+    # Traefik dashboard
+    traefik:
+      rule: "Host(`traefik.localhost`)"
+      entrypoints:
+        - websecure
+      tls: true
+      middlewares:
+        - secure-headers
+      service: "api@internal"
+      
+    # Keycloak service
+    keycloak:
+      rule: "Host(`keycloak.localhost`)"
+      entrypoints:
+        - websecure
+      tls: true
+      middlewares:
+        - keycloak-headers
+        - keycloak-secure-headers
+      service: keycloak
+      
+    # Demo app service
+    demo-app:
+      rule: "Host(`app.localhost`)"
+      entrypoints:
+        - websecure
+      tls: true
+      middlewares:
+        - secure-headers
+      service: demo-app
+
+  services:
+    # Keycloak service
+    keycloak:
+      loadBalancer:
+        servers:
+          - url: "https://keycloak:8443"
+        serversTransport: insecureTransport
+    
+    # Demo app service
+    demo-app:
+      loadBalancer:
+        servers:
+          - url: "https://demo-app:3443"
+        serversTransport: insecureTransport
+
+  serversTransports:
+    insecureTransport:
+      insecureSkipVerify: true
+
+tls:
+  certificates:
+    - certFile: /certs/localhost.crt
+      keyFile: /certs/localhost.key
+      stores:
+        - default
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/localhost.crt
+        keyFile: /certs/localhost.key
+  options:
+    default:
+      minVersion: "VersionTLS12"
+      cipherSuites:
+        - "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384"
+        - "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305"
+        - "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"
+        - "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256"
+
