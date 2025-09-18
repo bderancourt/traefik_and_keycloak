@@ -45,14 +45,13 @@ services:
     volumes:
       - ./traefik/certs:/opt/keycloak/conf/certs:ro
       - ./keycloak/demo-realm.json:/opt/keycloak/data/import/demo-realm.json:ro
-    ports:
-      - "8443:8443"
+    # No direct port exposure - all traffic goes through Traefik
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
-      KC_HOSTNAME: keycloak
+      KC_HOSTNAME: keycloak.localhost
       KC_HOSTNAME_STRICT: "false"
       KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/certs/localhost.crt
       KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/certs/localhost.key
@@ -76,8 +75,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./traefik/certs:/app/certs:ro
-    ports:
-      - "3443:3443"
+    # No direct port exposure - all traffic goes through Traefik
     depends_on:
       - keycloak
     environment:
