@@ -1,6 +1,6 @@
-# WSL Setup Guide for Traefik + Keycloak
+# WSL Setup Guide for Traefik + Keycloak HTTPS Stack
 
-This guide covers the specific steps needed to run the Traefik + Keycloak stack in WSL (Windows Subsystem for Linux).
+This guide covers the specific steps needed to run the HTTPS-only Traefik + Keycloak stack in WSL (Windows Subsystem for Linux).
 
 ## 🔧 Prerequisites for WSL
 
@@ -32,7 +32,7 @@ wsl --shutdown
 wsl
 ```
 
-### 3. Install Podman in WSL
+### 3. Install Podman and Dependencies in WSL
 ```bash
 # Update system
 sudo apt update && sudo apt upgrade -y
@@ -46,6 +46,18 @@ echo "$USER:100000:65536" | sudo tee -a /etc/subgid
 
 # Restart user session
 podman system migrate
+```
+
+### 4. Install Additional Tools
+```bash
+# Install OpenSSL for certificate generation
+sudo apt install -y openssl curl git
+
+# Install podman-compose
+pip3 install podman-compose
+# or
+sudo apt install -y python3-pip
+pip3 install --user podman-compose
 ```
 
 ## 🚨 WSL-Specific Issues & Solutions
@@ -84,13 +96,150 @@ sudo nano /etc/resolv.conf
 # Or disable WSL DNS generation (already in wsl.conf above)
 ```
 
-## 🌐 Network Configuration for WSL
+## 🌐 WSL Network Configuration for HTTPS Stack
 
-### Access from Windows Host
-Your services will be available at:
-- `https://localhost:8443` (Keycloak/Apps)
-- `https://localhost:8808` (Traefik Dashboard)
-- `http://localhost:8080` (HTTP redirect)
+### SSL Certificate Trust (Optional)
+For development convenience, you can trust the self-signed certificates:
+
+1. After running the certificate generation script, copy the certificate:
+   ```bash
+   # In WSL
+   cp ./traefik/certs/localhost.crt /mnt/c/temp/
+   ```
+
+2. In Windows:
+   - Double-click the certificate file
+   - Install to "Trusted Root Certification Authorities"
+   - This eliminates browser security warnings
+
+## 🚀 Quick Start for WSL
+
+### 1. Clone and Setup
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd traefik_and_keycloak
+
+# Generate SSL certificates
+chmod +x scripts/generate-certs.sh
+./scripts/generate-certs.sh
+
+# Copy environment template
+cp .env.example .env
+# Edit .env with your passwords
+nano .env
+```
+
+### 2. Start the HTTPS Stack
+```bash
+# Start all services
+podman-compose up -d
+
+# Check status
+podman ps
+
+# View logs if needed
+podman-compose logs -f
+```
+
+### 3. Access Services
+- **Demo App**: https://app.localhost
+- **Keycloak Admin**: https://keycloak.localhost  
+- **Traefik Dashboard**: https://traefik.localhost
+
+## 🚨 WSL-Specific Troubleshooting
+
+### Issue 1: Port 443 Permission Denied
+**Problem**: WSL may not allow binding to port 443
+**Solution**: The stack now runs entirely through Traefik on port 443 with proper SSL termination
+
+### Issue 2: Container Communication
+**Problem**: Services can't communicate with each other
+**Solution**: Ensure all services are on the correct networks:
+```bash
+# Check networks
+podman network ls
+podman network inspect traefik_and_keycloak_web
+```
+
+### Issue 3: SSL Certificate Issues
+**Problem**: Browser shows certificate errors
+**Solution**: 
+1. Regenerate certificates: `./scripts/generate-certs.sh`
+2. Restart services: `podman-compose restart`
+3. Clear browser cache/data for localhost domains
+
+### Issue 4: Keycloak Hostname Issues
+**Problem**: Keycloak redirects to wrong URLs
+**Solution**: Verify the hostname configuration in podman-compose.yml:
+```yaml
+KC_HOSTNAME: keycloak.localhost
+KC_HOSTNAME_STRICT: "false"
+```
+
+### Issue 5: Performance Optimization
+**Problem**: Slow container startup in WSL
+**Solution**: 
+```bash
+# Increase WSL memory allocation
+# Create/edit C:\Users\<username>\.wslconfig
+[wsl2]
+memory=4GB
+processors=2
+```
+
+### Issue 6: File Permission Issues
+**Problem**: Permission denied on certificate files
+**Solution**:
+```bash
+# Fix permissions
+chmod +x scripts/generate-certs.sh
+sudo chown -R $USER:$USER traefik/certs/
+```
+
+## 🔧 Development Tips for WSL
+
+### 1. Container Management
+```bash
+# Stop all services
+podman-compose down
+
+# Remove all containers and start fresh
+podman-compose down -v
+podman-compose up -d
+
+# View real-time logs
+podman-compose logs -f keycloak
+```
+
+### 2. Certificate Management
+```bash
+# Regenerate certificates if needed
+./scripts/generate-certs.sh
+
+# Verify certificate validity
+openssl x509 -in traefik/certs/localhost.crt -text -noout
+```
+
+### 3. Environment Configuration
+```bash
+# Quick environment setup with secure passwords
+cp .env.example .env
+sed -i 's/your_secure_db_password_here/MyDbPassword123/' .env
+sed -i 's/your_admin_password_here/MyAdminPassword123/' .env
+```
+
+## 📝 Notes for WSL Users
+
+1. **Resource Usage**: WSL2 can consume significant memory. Monitor with `htop` or Windows Task Manager.
+
+2. **Persistence**: Containers and volumes persist across WSL sessions, but not across Windows reboots unless WSL is configured to start automatically.
+
+3. **File System**: Use Linux file system (`~/` or `/home/`) for better performance, not Windows mounted drives (`/mnt/c/`).
+
+4. **Networking**: The HTTPS-only setup ensures all traffic is properly encrypted and routed through Traefik.
+
+5. **Browser Access**: Use `https://app.localhost`, `https://keycloak.localhost`, etc. from your Windows browser - WSL2 automatically forwards these to the Linux containers.
 
 ### Port Forwarding (if needed)
 ```powershell

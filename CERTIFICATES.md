@@ -88,12 +88,13 @@ openssl x509 -in "${CERT_DIR}/${CERT_NAME}.crt" -noout -text | grep -E "(Subject
 
 echo ""
 echo "🔧 Next steps:"
-echo "1. Add the following to your /etc/hosts file:"
-echo "   127.0.0.1 app.localhost"
-echo "   127.0.0.1 keycloak.localhost" 
-echo "   127.0.0.1 traefik.localhost"
+echo "1. No hosts file changes needed (using path-based routing)"
 echo "2. Start the services: podman-compose up -d"
-echo "3. Trust the certificate in your browser (ignore security warnings)"
+echo "3. Access services via:"
+echo "   - Demo App: https://localhost/app/"
+echo "   - Keycloak: https://localhost/keycloak/"
+echo "   - Traefik: https://localhost/traefik/"
+echo "4. Trust the certificate in your browser (ignore security warnings)"
 
 EOF
 

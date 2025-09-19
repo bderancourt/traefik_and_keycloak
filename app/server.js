@@ -26,6 +26,27 @@ dns.lookup = function(hostname, options, callback) {
 const app = express();
 const port = process.env.HTTPS_PORT || 3443;
 
+// Trust proxy for proper path handling when behind reverse proxy
+app.set('trust proxy', true);
+
+// Middleware to provide base path to templates
+app.use((req, res, next) => {
+  res.locals.basePath = '/app';
+  next();
+});
+
+// Middleware to fix the request URL for Keycloak redirect URIs
+app.use((req, res, next) => {
+  // Override the originalUrl to include the base path for Keycloak
+  if (req.headers['x-forwarded-prefix'] || req.url.includes('auth_callback')) {
+    const basePath = '/app';
+    if (!req.originalUrl.startsWith(basePath)) {
+      req.originalUrl = basePath + req.originalUrl;
+    }
+  }
+  next();
+});
+
 // Session configuration
 const memoryStore = new session.MemoryStore();
 app.use(session({
@@ -35,10 +56,11 @@ app.use(session({
   store: memoryStore
 }));
 
-// Keycloak configuration for browser redirects
+// Hybrid Keycloak configuration that uses internal URL for server communication
+// but allows browser redirects to work correctly
 const keycloakConfig = {
   realm: process.env.KEYCLOAK_REALM || 'demo',
-  'auth-server-url': process.env.KEYCLOAK_URL || 'https://keycloak.localhost',
+  'auth-server-url': process.env.KEYCLOAK_INTERNAL_URL || 'https://keycloak:8443',
   'ssl-required': 'external',
   resource: process.env.KEYCLOAK_CLIENT_ID || 'demo-app',
   credentials: {
@@ -50,16 +72,24 @@ const keycloakConfig = {
   'verify-token-audience': false,
   'disable-trust-manager': true,
   'allow-any-hostname': true,
-  'truststore': false
-};
-
-// Internal configuration for server-to-server communication
-const keycloakInternalConfig = {
-  ...keycloakConfig,
-  'auth-server-url': process.env.KEYCLOAK_INTERNAL_URL || 'https://keycloak:8443'
+  'truststore': false,
+  'public-client': false
 };
 
 const keycloak = new Keycloak({ store: memoryStore }, keycloakConfig);
+
+// Middleware to intercept Keycloak redirects and replace internal URLs with public URLs
+app.use((req, res, next) => {
+  const originalRedirect = res.redirect;
+  res.redirect = function(url) {
+    // Replace internal Keycloak URLs with public URLs for browser redirects
+    if (typeof url === 'string' && url.includes('keycloak:8443/keycloak')) {
+      url = url.replace('https://keycloak:8443/keycloak', 'https://localhost/keycloak');
+    }
+    return originalRedirect.call(this, url);
+  };
+  next();
+});
 
 // Initialize Keycloak
 app.use(keycloak.middleware());

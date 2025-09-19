@@ -36,12 +36,14 @@ http:
         customRequestHeaders:
           X-Forwarded-Proto: "https"
           X-Forwarded-Port: "443"
-          X-Forwarded-Host: "keycloak.localhost"
+          X-Forwarded-Host: "localhost"
+          X-Forwarded-Prefix: "/keycloak"
           X-Forwarded-For: ""
         hostsProxyHeaders:
           - "X-Forwarded-Host"
           - "X-Forwarded-Proto"
           - "X-Forwarded-Port"
+          - "X-Forwarded-Prefix"
           - "X-Forwarded-For"
         customResponseHeaders:
           X-Frame-Options: "SAMEORIGIN"
@@ -71,7 +73,7 @@ http:
     cors-headers:
       headers:
         accessControlAllowOriginList:
-          - "https://*.${DOMAIN}"
+          - "https://localhost"
         accessControlAllowMethods:
           - "GET"
           - "POST"
@@ -87,21 +89,61 @@ http:
         accessControlMaxAge: 100
         addVaryHeader: true
 
+    # Keycloak path replacement middleware
+    keycloak-pathfix:
+      replacePathRegex:
+        regex: "^/keycloak(.*)"
+        replacement: "$1"
+
+    # Path-based routing middleware
+    traefik-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/traefik"
+
+    keycloak-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/keycloak"
+
+    app-stripprefix:
+      stripPrefix:
+        prefixes:
+          - "/app"
+
+    # Root redirect middleware
+    root-redirect-middleware:
+      redirectRegex:
+        regex: "^(.*/)$"
+        replacement: "${1}app/"
+
   # Services and routers
   routers:
-    # Traefik dashboard
-    traefik:
-      rule: "Host(`traefik.localhost`)"
+    # Direct API access - for dashboard API calls that don't include /traefik prefix
+    traefik-direct-api:
+      rule: "PathPrefix(`/api`)"
       entrypoints:
         - websecure
       tls: true
       middlewares:
         - secure-headers
       service: "api@internal"
+      priority: 100
       
-    # Keycloak service
+    # Traefik dashboard - accessible at /traefik/
+    traefik:
+      rule: "PathPrefix(`/traefik`)"
+      entrypoints:
+        - websecure
+      tls: true
+      middlewares:
+        - secure-headers
+        - traefik-stripprefix
+      service: "api@internal"
+      
+    # Keycloak service - accessible at /keycloak/
     keycloak:
-      rule: "Host(`keycloak.localhost`)"
+      rule: "PathPrefix(`/keycloak`)"
       entrypoints:
         - websecure
       tls: true
@@ -110,14 +152,25 @@ http:
         - keycloak-secure-headers
       service: keycloak
       
-    # Demo app service
+    # Demo app service - accessible at /app/
     demo-app:
-      rule: "Host(`app.localhost`)"
+      rule: "PathPrefix(`/app`)"
       entrypoints:
         - websecure
       tls: true
       middlewares:
         - secure-headers
+        - app-stripprefix
+      service: demo-app
+
+    # Root redirect - redirect root to /app/
+    root-redirect:
+      rule: "Path(`/`)"
+      entrypoints:
+        - websecure
+      tls: true
+      middlewares:
+        - root-redirect-middleware
       service: demo-app
 
   services:

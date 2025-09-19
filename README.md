@@ -1,6 +1,6 @@
-# Traefik + Keycloak HTTPS Setup
+# Traefik + Keycloak HTTPS Setup with Path-Based Routing
 
-A complete containerized setup using Podman Compose with Traefik as reverse proxy, Keycloak as Identity Provider, and a demo Node.js application with OIDC authentication - all running with HTTPS everywhere.
+A complete containerized setup using Podman Compose with Traefik as reverse proxy, Keycloak as Identity Provider, and a demo Node.js application with OIDC authentication - all running with HTTPS everywhere and path-based routing for Azure deployment compatibility.
 
 ## Architecture
 
@@ -8,7 +8,7 @@ A complete containerized setup using Podman Compose with Traefik as reverse prox
 ┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
 │   Browser       │    │   Traefik    │    │   Keycloak      │
 │                 │───▶│  (Port 443)  │───▶│  (Port 8443)    │
-│                 │    │   HTTPS      │    │   HTTPS         │
+│ Path-based URLs │    │   HTTPS      │    │   HTTPS         │
 └─────────────────┘    └──────────────┘    └─────────────────┘
                               │
                               ▼
@@ -22,10 +22,12 @@ A complete containerized setup using Podman Compose with Traefik as reverse prox
 ## Features
 
 - **HTTPS Everywhere**: All services communicate over HTTPS with self-signed certificates
+- **Path-Based Routing**: All services accessible under different paths (no subdomains required)
+- **Azure Deployment Ready**: Compatible with Azure Container Instances and App Service constraints
 - **Single Port Access**: Only port 443 is exposed externally
-- **OIDC Authentication**: Complete OAuth 2.0 / OpenID Connect flow
-- **Traefik Integration**: Automatic service discovery and routing
-- **Keycloak Ready**: Pre-configured realm with demo user
+- **OIDC Authentication**: Complete OAuth 2.0 / OpenID Connect flow with correct redirect URIs
+- **Traefik Integration**: Automatic service discovery and routing with API access for dashboard
+- **Keycloak Ready**: Pre-configured realm with demo user and path-based redirect URIs
 - **Containerized**: Full Podman/Docker Compose setup
 
 ## Quick Start
@@ -66,40 +68,42 @@ podman-compose ps
 
 ### 4. Access Services
 
-- **Demo App**: https://app.localhost
-- **Keycloak Admin**: https://keycloak.localhost/admin
-- **Traefik Dashboard**: https://traefik.localhost
+- **Demo App**: https://localhost/app/
+- **Keycloak Admin**: https://localhost/keycloak/admin
+- **Traefik Dashboard**: https://localhost/traefik/
 
 ### 5. Test Authentication
 
-1. Navigate to https://app.localhost
+1. Navigate to https://localhost/app/
 2. Click "Login with Keycloak"
-3. Use credentials: `demo-user` / `demo123`
+3. Use credentials: `demo` / `password`
 4. You should be redirected back to the app as authenticated user
 
 ## Service Details
 
 ### Traefik (Reverse Proxy)
-- **URL**: https://traefik.localhost
+- **URL**: https://localhost/traefik/
 - **Port**: 443 (HTTPS only)
 - **Features**: 
   - Automatic SSL termination
   - Service discovery
   - Load balancing
   - Header manipulation for OIDC
+  - Path-based routing
 
 ### Keycloak (Identity Provider)
-- **URL**: https://keycloak.localhost
-- **Admin URL**: https://keycloak.localhost/admin
+- **URL**: https://localhost/keycloak/
+- **Admin URL**: https://localhost/keycloak/admin
 - **Internal Port**: 8443
 - **Features**:
   - Pre-configured `demo` realm
   - OIDC client for demo app
   - Self-signed SSL certificates
   - Database persistence
+  - Path-based access
 
 ### Demo Application
-- **URL**: https://app.localhost
+- **URL**: https://localhost/app/
 - **Internal Port**: 3443
 - **Features**:
   - Node.js Express application
@@ -129,7 +133,7 @@ podman-compose ps
 1. **Certificate Errors**: Ensure certificates are generated and properly mounted
 2. **Authentication Fails**: Check Keycloak logs and realm configuration
 3. **502 Bad Gateway**: Verify all containers are running and healthy
-4. **DNS Resolution**: Ensure /etc/hosts entries for *.localhost domains
+4. **DNS Resolution**: Ensure localhost resolves correctly (path-based routing eliminates subdomain requirements)
 
 ### Useful Commands
 
@@ -183,6 +187,23 @@ podman exec [container] ping [target_container]
 2. Configure Traefik routing in `dynamic.yml`
 3. Generate/mount appropriate certificates
 4. Add to `web` network for external access
+
+## Azure Deployment Readiness
+
+This setup is specifically designed for Azure deployment compatibility:
+
+### Path-Based Routing Benefits
+- **No subdomain requirements**: Works with single hostname constraints
+- **Azure Container Instances compatible**: Single port exposure (443)
+- **Azure App Service ready**: Path-based routing works within App Service constraints
+- **Load balancer friendly**: All traffic flows through single entry point
+
+### Azure Migration Considerations
+- Replace self-signed certificates with Azure Key Vault certificates
+- Use Azure Database for PostgreSQL instead of containerized database
+- Configure Azure Container Registry for image storage
+- Set up Azure Application Gateway for production load balancing
+- Use Azure Active Directory for production identity management
 
 ## Security Considerations
 

@@ -65,13 +65,11 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "demo-app-secret",
       "redirectUris": [
-        "http://app.localhost/*",
-        "https://app.localhost/*",
+        "https://localhost/app/*",
         "https://demo-app:3443/*"
       ],
       "webOrigins": [
-        "http://app.localhost",
-        "https://app.localhost",
+        "https://localhost",
         "https://demo-app:3443"
       ],
       "protocol": "openid-connect",
