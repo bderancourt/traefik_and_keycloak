@@ -65,7 +65,8 @@
       "clientAuthenticatorType": "client-secret",
       "secret": "demo-app-secret",
       "redirectUris": [
-        "https://localhost/app/*",
+        "https://localhost/*",
+        "https://localhost/protected*",
         "https://demo-app:3443/*"
       ],
       "webOrigins": [

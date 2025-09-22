@@ -8,7 +8,8 @@ services:
     command:
       - --api.dashboard=true
       - --api.debug=true
-      - --log.level=INFO
+      - --log.level=DEBUG
+      #- --providers.docker=true
       - --providers.file.directory=/config
       - --providers.file.watch=true
       - --entrypoints.web.address=:80
@@ -24,78 +25,58 @@ services:
     networks:
       - web
 
-  keycloak-db:
-    image: docker.io/postgres:15-alpine
-    container_name: keycloak-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
-    volumes:
-      - keycloak_db_data:/var/lib/postgresql/data
-    networks:
-      - keycloak_internal
-
   keycloak:
     image: docker.io/keycloak/keycloak:latest
     container_name: keycloak
     restart: unless-stopped
-    command: start --import-realm
+    command: start-dev --import-realm
     volumes:
-      - ./traefik/certs:/opt/keycloak/conf/certs:ro
       - ./keycloak/demo-realm.json:/opt/keycloak/data/import/demo-realm.json:ro
+      - keycloak-data:/opt/keycloak/data
     # No direct port exposure - all traffic goes through Traefik
     environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME: "https://localhost/keycloak"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HTTP_RELATIVE_PATH: "/keycloak"
-      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/certs/localhost.crt
-      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/certs/localhost.key
-      KC_HTTPS_PORT: 8443
-      KC_HTTP_ENABLED: "false"
-      KC_PROXY: edge
+      KC_HTTP_ENABLED: "true"
+      KC_HTTP_PORT: 8080
       KC_PROXY_HEADERS: xforwarded
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-    depends_on:
-      - keycloak-db
+      KC_ADMIN: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     networks:
-      web:
-        aliases:
-          - keycloak.localhost
-      keycloak_internal:
+      - web
 
   demo-app:
     build: ./app
     container_name: demo-app
     restart: unless-stopped
-    volumes:
-      - ./traefik/certs:/app/certs:ro
     # No direct port exposure - all traffic goes through Traefik
     depends_on:
       - keycloak
     environment:
       KEYCLOAK_URL: https://localhost/keycloak
-      KEYCLOAK_INTERNAL_URL: https://keycloak:8443/keycloak
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/keycloak
       KEYCLOAK_REALM: demo
       KEYCLOAK_CLIENT_ID: demo-app
       KEYCLOAK_CLIENT_SECRET: demo-app-secret
-      HTTPS_PORT: 3443
-      SSL_CERT: /app/certs/localhost.crt
-      SSL_KEY: /app/certs/localhost.key
+      HTTP_PORT: 3000
     networks:
       - web
 
+  # Network debugging container with useful tools
+  nettools:
+    image: docker.io/nicolaka/netshoot:latest
+    container_name: nettools
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    networks:
+      - web
+    command: sleep infinity
+
 networks:
   web:
-    external: false
-  keycloak_internal:
-    external: false
+    driver: bridge
 
 volumes:
-  keycloak_db_data:
+  keycloak-data:

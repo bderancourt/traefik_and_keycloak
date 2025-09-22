@@ -19,13 +19,13 @@
                 <p>Email: <%= user.email %></p>
                 <p>You are successfully authenticated with Keycloak.</p>
             </div>
-            <a href="<%= basePath %>/protected" class="btn">Visit Protected Page</a>
-            <a href="<%= basePath %>/logout" class="btn" style="background: #dc3545;">Logout</a>
+            <a href="/protected" class="btn">Visit Protected Page</a>
+            <a href="/logout" class="btn" style="background: #dc3545;">Logout</a>
         <% } else { %>
             <div class="info">
                 <p>You are not logged in. Click the button below to authenticate with Keycloak.</p>
             </div>
-            <a href="<%= basePath %>/protected" class="btn">Login with Keycloak</a>
+            <a href="/protected" class="btn">Login with Keycloak</a>
         <% } %>
     </div>
 </body>

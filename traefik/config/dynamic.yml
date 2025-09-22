@@ -1,21 +1,10 @@
 http:
   middlewares:
-    # Middleware for secure headers
+    # Middleware for secure headers (optimized for HTTPS-only setup)
     secure-headers:
       headers:
-        accessControlAllowMethods:
-          - GET
-          - OPTIONS
-          - PUT
-          - POST
-          - DELETE
-        accessControlMaxAge: 100
-        hostsProxyHeaders:
-          - "X-Forwarded-Host"
+        # HTTP security headers
         referrerPolicy: "same-origin"
-        sslRedirect: true
-        sslHost: ""
-        sslForceHost: true
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
@@ -23,53 +12,35 @@ http:
         frameDeny: true
         contentTypeNosniff: true
         browserXssFilter: true
+        # Additional security headers
+        customResponseHeaders:
+          X-Content-Type-Options: "nosniff"
+          X-Frame-Options: "DENY"
+          X-XSS-Protection: "1; mode=block"
+          Referrer-Policy: "same-origin"
 
-    # Rate limiting middleware
-    rate-limit:
-      rateLimit:
-        burst: 100
-        average: 50
-
-    # Keycloak-specific headers middleware
+    # Keycloak-specific headers middleware (using modern Forwarded header)
     keycloak-headers:
       headers:
         customRequestHeaders:
+          # Use X-Forwarded headers for now (more reliable than Forwarded in Traefik)
           X-Forwarded-Proto: "https"
-          X-Forwarded-Port: "443"
           X-Forwarded-Host: "localhost"
-          X-Forwarded-Prefix: "/keycloak"
-          X-Forwarded-For: ""
-        hostsProxyHeaders:
-          - "X-Forwarded-Host"
-          - "X-Forwarded-Proto"
-          - "X-Forwarded-Port"
-          - "X-Forwarded-Prefix"
-          - "X-Forwarded-For"
+          X-Forwarded-Port: "443"
         customResponseHeaders:
           X-Frame-Options: "SAMEORIGIN"
 
-    # Keycloak-specific secure headers (without frameDeny)
+    # Keycloak-specific secure headers (minimal, Keycloak-friendly)
     keycloak-secure-headers:
       headers:
-        accessControlAllowMethods:
-          - GET
-          - OPTIONS
-          - PUT
-          - POST
-          - DELETE
-        accessControlMaxAge: 100
-        hostsProxyHeaders:
-          - "X-Forwarded-Host"
-        referrerPolicy: "same-origin"
-        sslRedirect: true
-        sslHost: ""
-        sslForceHost: true
+        # HSTS for Keycloak (important for auth security)
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
         forceSTSHeader: true
+        # Content security without breaking Keycloak functionality
         contentTypeNosniff: true
-        browserXssFilter: true
+        referrerPolicy: "same-origin"
     cors-headers:
       headers:
         accessControlAllowOriginList:
@@ -106,17 +77,6 @@ http:
         prefixes:
           - "/keycloak"
 
-    app-stripprefix:
-      stripPrefix:
-        prefixes:
-          - "/app"
-
-    # Root redirect middleware
-    root-redirect-middleware:
-      redirectRegex:
-        regex: "^(.*/)$"
-        replacement: "${1}app/"
-
   # Services and routers
   routers:
     # Direct API access - for dashboard API calls that don't include /traefik prefix
@@ -124,73 +84,57 @@ http:
       rule: "PathPrefix(`/api`)"
       entrypoints:
         - websecure
-      tls: true
       middlewares:
         - secure-headers
       service: "api@internal"
       priority: 100
+      tls: {}
       
     # Traefik dashboard - accessible at /traefik/
     traefik:
       rule: "PathPrefix(`/traefik`)"
       entrypoints:
         - websecure
-      tls: true
       middlewares:
         - secure-headers
         - traefik-stripprefix
       service: "api@internal"
+      tls: {}
       
     # Keycloak service - accessible at /keycloak/
     keycloak:
       rule: "PathPrefix(`/keycloak`)"
       entrypoints:
         - websecure
-      tls: true
       middlewares:
         - keycloak-headers
         - keycloak-secure-headers
       service: keycloak
+      tls: {}
       
-    # Demo app service - accessible at /app/
+    # Demo app service - accessible at root /
     demo-app:
-      rule: "PathPrefix(`/app`)"
+      rule: "!PathPrefix(`/keycloak`) && !PathPrefix(`/traefik`) && !PathPrefix(`/api`)"
       entrypoints:
         - websecure
-      tls: true
       middlewares:
         - secure-headers
-        - app-stripprefix
       service: demo-app
-
-    # Root redirect - redirect root to /app/
-    root-redirect:
-      rule: "Path(`/`)"
-      entrypoints:
-        - websecure
-      tls: true
-      middlewares:
-        - root-redirect-middleware
-      service: demo-app
+      priority: 1
+      tls: {}
 
   services:
-    # Keycloak service
+    # Keycloak service (HTTP mode)
     keycloak:
       loadBalancer:
         servers:
-          - url: "https://keycloak:8443"
-        serversTransport: insecureTransport
+          - url: "http://keycloak:8080"
     
-    # Demo app service
+    # Demo app service (HTTP mode)
     demo-app:
       loadBalancer:
         servers:
-          - url: "https://demo-app:3443"
-        serversTransport: insecureTransport
-
-  serversTransports:
-    insecureTransport:
-      insecureSkipVerify: true
+          - url: "http://demo-app:3000"
 
 tls:
   certificates:
