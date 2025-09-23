@@ -2,6 +2,14 @@
 
 A complete containerized setup using Podman Compose with Traefik as reverse proxy, Keycloak as Identity Provider, and a demo Node.js application with OIDC authentication. Features automatic HTTPS with self-signed certificates and modern Docker provider configuration.
 
+> **🚀 Latest Updates**: 
+> - ✅ **Ultra-Minimal Configuration**: Only `DOMAIN` variable needed in `.env` file
+> - ✅ **Domain Parameterization**: Configurable via single environment variable for easy deployment
+> - ✅ **Hardcoded Demo Credentials**: Simplified setup with preconfigured passwords and secrets
+> - ✅ **Dynamic Keycloak Config**: Generated at runtime, no static configuration files
+> - ✅ **Single-Page Auth Flow**: Streamlined user experience with unified login/protected page
+> - ✅ **Production Ready**: Add secrets management for production deployment
+
 ## Architecture
 
 ```
@@ -24,10 +32,13 @@ A complete containerized setup using Podman Compose with Traefik as reverse prox
 - **Auto-Generated HTTPS**: Traefik automatically generates self-signed certificates for development
 - **TLS Termination**: HTTPS termination at Traefik, internal HTTP communication
 - **Docker Provider**: Modern Traefik configuration using container labels (no static config files)
+- **Domain Parameterization**: Configurable via `DOMAIN` environment variable for flexible deployment
+- **Dynamic Configuration**: Keycloak adapter config generated at runtime from environment variables
 - **Path-Based Routing**: Services accessible via `/keycloak/` and root paths
 - **Single-Page Auth**: Simplified authentication flow with single page handling both login and protected content
 - **OIDC Authentication**: Complete OAuth 2.0 / OpenID Connect flow with proper ISS validation
 - **Proxy-Aware**: X-Forwarded headers ensure proper token validation behind reverse proxy
+- **Production Ready**: Zero code changes needed for deployment to different environments
 - **Containerized**: Full Podman/Docker Compose setup with automatic service discovery
 
 ## Quick Start
@@ -42,10 +53,16 @@ A complete containerized setup using Podman Compose with Traefik as reverse prox
 Create a `.env` file:
 
 ```bash
-KEYCLOAK_DB_PASSWORD=your_secure_db_password
-KEYCLOAK_ADMIN_PASSWORD=your_admin_password
-KEYCLOAK_CLIENT_SECRET=demo-app-secret
+# Domain configuration - replace with your actual domain for production
+DOMAIN=localhost
 ```
+
+> **Note**: This demo uses hardcoded credentials for simplicity:
+> - **Keycloak Admin**: `admin` / `admin`
+> - **Demo User**: `demo` / `password`  
+> - **Client Secret**: `demo-app-secret` (preconfigured in realm)
+> 
+> For production deployment, change `DOMAIN=localhost` to your actual domain name. All services will automatically use this domain for external URLs.
 
 ### 2. Start Services
 
@@ -62,13 +79,15 @@ podman-compose logs -f
 
 ### 3. Access Services
 
-- **Demo App**: https://localhost/ (single-page auth flow)
-- **Keycloak Admin**: https://localhost/keycloak/admin
-- **Traefik Dashboard**: https://localhost:8080 (HTTP)
+- **Demo App**: https://${DOMAIN}/ (single-page auth flow)
+- **Keycloak Admin**: https://${DOMAIN}/keycloak/admin
+- **Traefik Dashboard**: http://${DOMAIN}:8080 (HTTP)
+
+> Replace `${DOMAIN}` with your actual domain. For local development with default settings, this will be `localhost`.
 
 ### 4. Test Authentication
 
-1. Navigate to https://localhost/
+1. Navigate to https://${DOMAIN}/ (e.g., https://localhost/)
 2. Accept the self-signed certificate warning in your browser
 3. Click "🔑 Login with Keycloak" 
 4. Use credentials: `demo` / `password`
@@ -77,7 +96,7 @@ podman-compose logs -f
 ## Service Details
 
 ### Traefik (Reverse Proxy)
-- **Dashboard**: http://localhost:8080
+- **Dashboard**: http://${DOMAIN}:8080 (replace with your domain)
 - **HTTPS Port**: 443 (with auto-generated self-signed certificates)
 - **Configuration**: Container labels (Docker provider)
 - **Features**: 
@@ -87,41 +106,81 @@ podman-compose logs -f
   - Path-based routing with priorities
 
 ### Keycloak (Identity Provider)
-- **URL**: https://localhost/keycloak/
-- **Admin URL**: https://localhost/keycloak/admin
+- **URL**: https://${DOMAIN}/keycloak/ (replace with your domain)
+- **Admin URL**: https://${DOMAIN}/keycloak/admin (replace with your domain)
 - **Internal Port**: 8080 (HTTP)
 - **Features**:
-  - Pre-configured `demo` realm imported at startup
-  - OIDC client for demo app
-  - Proxy mode with forwarded headers support
-  - Database persistence
-  - Modern KC_PROXY_HEADERS configuration
+  - **Realm auto-import**: `demo` realm with preconfigured client and user loaded from `demo-realm.json`
+  - **Zero manual configuration**: Everything configured via imported realm file
+  - **OIDC client preconfigured**: `demo-app` client with secret `demo-app-secret`
+  - **Demo user ready**: `demo` / `password` credentials available immediately
+  - **Proxy mode**: Forwarded headers support for reverse proxy awareness
+  - **Database persistence**: Realm and user data persisted in volume
 
 ### Demo Application
-- **URL**: https://localhost/
+- **URL**: https://${DOMAIN}/ (replace with your domain)
 - **Internal Port**: 3000 (HTTP)
 - **Features**:
-  - Single-page authentication flow
-  - Node.js Express with keycloak-connect
-  - Proxy-aware token validation
-  - HTTP request interception for ISS consistency
-  - Session management and user profile display
+  - **Dynamic Keycloak configuration**: Built from environment variables with sensible defaults
+  - **Zero hardcoded realm settings**: Uses imported realm configuration automatically
+  - **Single-page authentication flow**: Unified login and protected content experience
+  - **Proxy-aware token validation**: X-Forwarded headers for proper ISS validation
+  - **HTTP request interception**: Internal service communication with external URL consistency
+  - **Session management**: Secure session handling with user profile display
 
 ## Configuration Files
 
 ### Key Components
 
-- `podman-compose.yml` - Main orchestration with Traefik labels
-- `keycloak/demo-realm.json` - Keycloak realm configuration
-- `app/server.js` - Demo application with OIDC and proxy awareness
-- `app/keycloak.json` - Keycloak adapter configuration
+- `podman-compose.yml` - Main orchestration with Traefik labels and minimal environment variables
+- `.env` - Ultra-minimal environment configuration (only `DOMAIN`)
+- `keycloak/demo-realm.json` - Complete Keycloak realm configuration with demo user and OIDC client
+- `app/server.js` - Demo application with dynamic Keycloak config using sensible defaults
+- `app/entrypoint.sh` - Simplified container entrypoint (no custom host resolution)
 
 ### Modern Architecture
 
+- **Minimal environment configuration**: Only `DOMAIN` variable needed for deployment
+- **Realm-driven configuration**: All Keycloak settings imported from JSON file at startup
+- **Dynamic Keycloak config**: Generated at runtime with sensible defaults (realm: demo, client: demo-app)
 - **No static config files**: Traefik uses Docker provider with container labels
 - **Auto-generated TLS**: No certificate management required
 - **Internal HTTP**: Services communicate via HTTP internally, HTTPS externally
 - **ISS Handling**: Proper token validation with X-Forwarded headers
+- **Zero redundant variables**: Environment only contains what's actually needed
+
+### Environment Configuration
+
+The system uses an ultra-minimal `.env` file for configuration:
+
+```bash
+# Domain configuration - change for different environments
+DOMAIN=localhost                    # Use your actual domain for production
+```
+
+**Demo Credentials (hardcoded for simplicity):**
+- **Keycloak Admin**: `admin` / `admin`
+- **Demo User**: `demo` / `password`
+- **OIDC Client Secret**: `demo-app-secret`
+
+**Key Benefits:**
+- **Single variable configuration**: Only domain needs to be changed for deployment
+- **Zero secrets management**: Demo uses hardcoded credentials for simplicity  
+- **Environment flexibility**: Switch between dev/staging/prod by changing one variable  
+- **Dynamic configuration**: Keycloak adapter config generated at runtime
+- **Production ready**: Add secrets management for production deployment
+
+**Deployment Examples:**
+```bash
+# Local development
+DOMAIN=localhost
+
+# Staging environment  
+DOMAIN=staging.yourdomain.com
+
+# Production (with proper secrets management)
+DOMAIN=yourdomain.com
+```
 
 ## Troubleshooting
 
@@ -154,8 +213,8 @@ podman-compose down && podman volume prune -f && podman-compose up -d
 ### Debug Steps
 
 ```bash
-# Check Traefik routes
-curl -s http://localhost:8080/api/http/routers | jq
+# Check Traefik routes (replace localhost with your domain)
+curl -s http://${DOMAIN}:8080/api/http/routers | jq
 
 # Test internal connectivity
 podman exec demo-app ping keycloak
@@ -169,7 +228,7 @@ podman logs keycloak --tail 50
 
 ### Authentication Flow
 
-1. **User visits** `https://localhost/`
+1. **User visits** `https://${DOMAIN}/` (where ${DOMAIN} is your configured domain)
 2. **App checks** if user has valid Keycloak session
 3. **If not authenticated**: Shows login page with "Login with Keycloak" button
 4. **User clicks login**: Redirects to `/login` → Keycloak → back to `/` 
@@ -199,9 +258,30 @@ podman logs keycloak --tail 50
    podman-compose restart demo-app
    ```
 
-2. **Traefik Config**: Configuration is now in container labels in `podman-compose.yml`
+2. **Environment Variables**: Update `.env` file for configuration changes:
+   ```bash
+   # Edit .env file with new values
+   nano .env
+   
+   # Restart affected services to pick up changes
+   podman-compose down && podman-compose up -d
+   ```
+
+3. **Traefik Config**: Configuration is now in container labels in `podman-compose.yml`
    ```bash
    podman-compose up -d  # Apply label changes
+   ```
+
+4. **Domain Changes**: To change domain (dev → staging → production):
+   ```bash
+   # Update DOMAIN in .env file
+   echo "DOMAIN=yourdomain.com" > .env.new
+   echo "KEYCLOAK_ADMIN_PASSWORD=your_admin_password" >> .env.new  
+   echo "KEYCLOAK_CLIENT_SECRET=your_client_secret" >> .env.new
+   mv .env.new .env
+   
+   # Restart stack with new domain
+   podman-compose down && podman-compose up -d
    ```
 
 3. **Keycloak Realm**: The realm is imported automatically from `keycloak/demo-realm.json`
@@ -226,6 +306,7 @@ podman logs keycloak --tail 50
 
 **Security**:
 - Replace auto-generated certificates with proper CA-signed certificates or Let's Encrypt
+- **Externalize hardcoded credentials**: Move admin passwords and client secrets to environment variables or secrets management
 - Use proper secrets management (HashiCorp Vault, Kubernetes secrets, etc.)
 - Configure security headers and HSTS
 - Enable proper audit logging and monitoring
@@ -238,18 +319,52 @@ podman logs keycloak --tail 50
 - Use external load balancer for multi-instance deployments
 
 **Configuration**:
+- Update `DOMAIN` in `.env` to your production domain (e.g., `DOMAIN=yourdomain.com`)
+- **Add production credentials** to `.env` or secrets management:
+  ```bash
+  DOMAIN=yourdomain.com
+  KEYCLOAK_ADMIN_PASSWORD=secure_random_password
+  KEYCLOAK_CLIENT_SECRET=secure_random_client_secret
+  ```
+- Update `podman-compose.yml` to use `${KEYCLOAK_ADMIN_PASSWORD}` and `${KEYCLOAK_CLIENT_SECRET}`
 - Set proper Keycloak realm configuration for production domains
 - Configure CORS and CSP policies
 - Enable rate limiting and DDoS protection
 - Use production-grade container orchestration (Kubernetes, etc.)
 
+**Environment Variables for Production**:
+```bash
+# Production .env example
+DOMAIN=yourdomain.com
+KEYCLOAK_ADMIN_PASSWORD=secure_random_password_here
+KEYCLOAK_CLIENT_SECRET=secure_random_secret_here
+```
+
 ### Cloud Deployment
 
-This setup can be adapted for cloud deployment:
+This setup can be adapted for cloud deployment with minimal changes:
 
 - **Azure**: Use Azure Container Instances or AKS with Azure Key Vault for certificates
+  ```bash
+  # Azure deployment example
+  DOMAIN=myapp.azurecontainer.io
+  ```
 - **AWS**: Deploy on ECS/EKS with ALB and ACM for certificates  
+  ```bash
+  # AWS deployment example  
+  DOMAIN=myapp.amazonaws.com
+  ```
 - **Kubernetes**: Use cert-manager for automatic certificate provisioning
+  ```bash
+  # Kubernetes deployment example
+  DOMAIN=myapp.k8s.example.com
+  ```
+
+**Key Advantages for Cloud Deployment:**
+- ✅ **Single variable change**: Only `DOMAIN` needs updating for new environments
+- ✅ **No code modifications**: Application automatically adapts to new domain
+- ✅ **Environment parity**: Same codebase works across dev/staging/production
+- ✅ **Container-friendly**: All configuration via environment variables
 
 ## Contributing
 

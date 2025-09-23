@@ -52,7 +52,7 @@ services:
       - keycloak-data:/opt/keycloak/data
     # No direct port exposure - all traffic goes through Traefik
     environment:
-      KC_HOSTNAME: "https://localhost/keycloak"
+      KC_HOSTNAME: "https://${DOMAIN}/keycloak"
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HTTP_RELATIVE_PATH: "/keycloak"
       KC_HTTP_ENABLED: "true"
@@ -83,11 +83,9 @@ services:
     depends_on:
       - keycloak
     environment:
-      KEYCLOAK_URL: https://localhost/keycloak
+      DOMAIN: ${DOMAIN}
+      KEYCLOAK_URL: https://${DOMAIN}/keycloak
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080/keycloak
-      KEYCLOAK_REALM: demo
-      KEYCLOAK_CLIENT_ID: demo-app
-      KEYCLOAK_CLIENT_SECRET: demo-app-secret
       HTTP_PORT: 3000
     labels:
       # Demo app accessible at root / (catch-all for non-keycloak, non-traefik paths)

@@ -4,6 +4,7 @@ const Keycloak = require('keycloak-connect');
 
 const app = express();
 const port = process.env.HTTP_PORT || 3000;
+const domain = process.env.DOMAIN || 'localhost';
 
 // Trust proxy for proper path handling when behind reverse proxy
 app.set('trust proxy', true);
@@ -21,8 +22,18 @@ app.use(session({
   }
 }));
 
-// Initialize Keycloak configuration with external URL for consistency
-const keycloakConfigOriginal = require('./keycloak.json');
+// Initialize Keycloak configuration dynamically using environment variables
+const keycloakConfigOriginal = {
+  "realm": process.env.KEYCLOAK_REALM || "demo",
+  "auth-server-url": process.env.KEYCLOAK_URL || `https://${domain}/keycloak`,
+  "ssl-required": "external",
+  "resource": process.env.KEYCLOAK_CLIENT_ID || "demo-app",
+  "credentials": {
+    "secret": process.env.KEYCLOAK_CLIENT_SECRET || "demo-app-secret"
+  },
+  "confidential-port": 0
+};
+
 const internalUrl = process.env.KEYCLOAK_INTERNAL_URL || 'http://keycloak:8080/keycloak';
 const externalUrl = keycloakConfigOriginal['auth-server-url'];
 
@@ -49,7 +60,7 @@ http.request = function(options, callback) {
   }
   
   // Redirect external Keycloak URLs to internal service
-  if (options.hostname === 'localhost' && options.path && options.path.includes('/keycloak')) {
+  if (options.hostname === domain && options.path && options.path.includes('/keycloak')) {
     console.log('[KEYCLOAK] Redirecting HTTP request from external to internal service');
     options.hostname = 'keycloak';
     options.port = 8080;
@@ -58,7 +69,7 @@ http.request = function(options, callback) {
     // Add forwarded headers so Keycloak knows the original external context
     if (!options.headers) options.headers = {};
     options.headers['X-Forwarded-Proto'] = 'https';
-    options.headers['X-Forwarded-Host'] = 'localhost';
+    options.headers['X-Forwarded-Host'] = domain;
     options.headers['X-Forwarded-Port'] = '443';
     options.headers['X-Forwarded-For'] = '127.0.0.1';
     console.log('[KEYCLOAK] Added forwarded headers for backend validation');
@@ -73,7 +84,7 @@ https.request = function(options, callback) {
   }
   
   // Redirect external Keycloak URLs to internal service
-  if (options.hostname === 'localhost' && options.path && options.path.includes('/keycloak')) {
+  if (options.hostname === domain && options.path && options.path.includes('/keycloak')) {
     console.log('[KEYCLOAK] Redirecting HTTPS request from external to internal service');
     options.hostname = 'keycloak';
     options.port = 8080;
@@ -82,7 +93,7 @@ https.request = function(options, callback) {
     // Add forwarded headers so Keycloak knows the original external context
     if (!options.headers) options.headers = {};
     options.headers['X-Forwarded-Proto'] = 'https';
-    options.headers['X-Forwarded-Host'] = 'localhost';
+    options.headers['X-Forwarded-Host'] = domain;
     options.headers['X-Forwarded-Port'] = '443';
     options.headers['X-Forwarded-For'] = '127.0.0.1';
     console.log('[KEYCLOAK] Added forwarded headers for backend validation');
