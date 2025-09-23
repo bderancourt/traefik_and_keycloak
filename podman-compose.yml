@@ -19,7 +19,7 @@ services:
     ports:
       - "443:443"
     volumes:
-      - /run/user/1000/podman/podman.sock:/var/run/docker.sock:ro
+      - /run/user/${UID}/podman/podman.sock:/var/run/docker.sock:ro
     labels:
       # Traefik dashboard accessible at /traefik/
       - "traefik.enable=true"
