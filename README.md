@@ -1,52 +1,43 @@
-# Traefik + Keycloak HTTPS Setup with Path-Based Routing
+# Traefik + Keycloak OIDC Authentication Demo
 
-A complete containerized setup using Podman Compose with Traefik as reverse proxy, Keycloak as Identity Provider, and a demo Node.js application with OIDC authentication - all running with HTTPS everywhere and path-based routing for Azure deployment compatibility.
+A complete containerized setup using Podman Compose with Traefik as reverse proxy, Keycloak as Identity Provider, and a demo Node.js application with OIDC authentication. Features automatic HTTPS with self-signed certificates and modern Docker provider configuration.
 
 ## Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────┐    ┌─────────────────┐
 │   Browser       │    │   Traefik    │    │   Keycloak      │
-│                 │───▶│  (Port 443)  │───▶│  (Port 8443)    │
-│ Path-based URLs │    │   HTTPS      │    │   HTTPS         │
+│                 │───▶│  (Port 443)  │───▶│  (Port 8080)    │
+│ HTTPS requests  │    │   HTTPS      │    │   HTTP          │
 └─────────────────┘    └──────────────┘    └─────────────────┘
                               │
                               ▼
                        ┌─────────────────┐
                        │   Demo App      │
-                       │  (Port 3443)    │
-                       │   HTTPS         │
+                       │  (Port 3000)    │
+                       │   HTTP          │
                        └─────────────────┘
 ```
 
 ## Features
 
-- **HTTPS Everywhere**: All services communicate over HTTPS with self-signed certificates
-- **Path-Based Routing**: All services accessible under different paths (no subdomains required)
-- **Azure Deployment Ready**: Compatible with Azure Container Instances and App Service constraints
-- **Single Port Access**: Only port 443 is exposed externally
-- **OIDC Authentication**: Complete OAuth 2.0 / OpenID Connect flow with correct redirect URIs
-- **Traefik Integration**: Automatic service discovery and routing with API access for dashboard
-- **Keycloak Ready**: Pre-configured realm with demo user and path-based redirect URIs
-- **Containerized**: Full Podman/Docker Compose setup
+- **Auto-Generated HTTPS**: Traefik automatically generates self-signed certificates for development
+- **TLS Termination**: HTTPS termination at Traefik, internal HTTP communication
+- **Docker Provider**: Modern Traefik configuration using container labels (no static config files)
+- **Path-Based Routing**: Services accessible via `/keycloak/` and root paths
+- **Single-Page Auth**: Simplified authentication flow with single page handling both login and protected content
+- **OIDC Authentication**: Complete OAuth 2.0 / OpenID Connect flow with proper ISS validation
+- **Proxy-Aware**: X-Forwarded headers ensure proper token validation behind reverse proxy
+- **Containerized**: Full Podman/Docker Compose setup with automatic service discovery
 
 ## Quick Start
 
 ### Prerequisites
 
-- Podman with podman-compose
-- Basic understanding of containers and OIDC
+- Podman with podman-compose (or Docker with docker-compose)
+- No certificate generation required - Traefik handles everything automatically
 
-### 1. Generate Certificates
-
-First, create the required SSL certificates:
-
-```bash
-# See CERTIFICATES.md for detailed instructions
-./scripts/generate-certs.sh
-```
-
-### 2. Environment Setup
+### 1. Environment Setup
 
 Create a `.env` file:
 
@@ -56,7 +47,7 @@ KEYCLOAK_ADMIN_PASSWORD=your_admin_password
 KEYCLOAK_CLIENT_SECRET=demo-app-secret
 ```
 
-### 3. Start Services
+### 2. Start Services
 
 ```bash
 # Start all services
@@ -64,76 +55,82 @@ podman-compose up -d
 
 # Check status
 podman-compose ps
+
+# View logs (optional)
+podman-compose logs -f
 ```
 
-### 4. Access Services
+### 3. Access Services
 
-- **Demo App**: https://localhost/app/
+- **Demo App**: https://localhost/ (single-page auth flow)
 - **Keycloak Admin**: https://localhost/keycloak/admin
-- **Traefik Dashboard**: https://localhost/traefik/
+- **Traefik Dashboard**: https://localhost:8080 (HTTP)
 
-### 5. Test Authentication
+### 4. Test Authentication
 
-1. Navigate to https://localhost/app/
-2. Click "Login with Keycloak"
-3. Use credentials: `demo` / `password`
-4. You should be redirected back to the app as authenticated user
+1. Navigate to https://localhost/
+2. Accept the self-signed certificate warning in your browser
+3. Click "🔑 Login with Keycloak" 
+4. Use credentials: `demo` / `password`
+5. You'll be redirected back to the secured page showing your profile
 
 ## Service Details
 
 ### Traefik (Reverse Proxy)
-- **URL**: https://localhost/traefik/
-- **Port**: 443 (HTTPS only)
+- **Dashboard**: http://localhost:8080
+- **HTTPS Port**: 443 (with auto-generated self-signed certificates)
+- **Configuration**: Container labels (Docker provider)
 - **Features**: 
-  - Automatic SSL termination
-  - Service discovery
-  - Load balancing
-  - Header manipulation for OIDC
-  - Path-based routing
+  - Automatic TLS certificate generation
+  - Service discovery via Docker API
+  - X-Forwarded headers for proxy awareness
+  - Path-based routing with priorities
 
 ### Keycloak (Identity Provider)
 - **URL**: https://localhost/keycloak/
 - **Admin URL**: https://localhost/keycloak/admin
-- **Internal Port**: 8443
+- **Internal Port**: 8080 (HTTP)
 - **Features**:
-  - Pre-configured `demo` realm
+  - Pre-configured `demo` realm imported at startup
   - OIDC client for demo app
-  - Self-signed SSL certificates
+  - Proxy mode with forwarded headers support
   - Database persistence
-  - Path-based access
+  - Modern KC_PROXY_HEADERS configuration
 
 ### Demo Application
-- **URL**: https://localhost/app/
-- **Internal Port**: 3443
+- **URL**: https://localhost/
+- **Internal Port**: 3000 (HTTP)
 - **Features**:
-  - Node.js Express application
-  - Keycloak OIDC integration
-  - Session management
-  - Protected routes
+  - Single-page authentication flow
+  - Node.js Express with keycloak-connect
+  - Proxy-aware token validation
+  - HTTP request interception for ISS consistency
+  - Session management and user profile display
 
 ## Configuration Files
 
 ### Key Components
 
-- `podman-compose.yml` - Main orchestration file
-- `traefik/config/dynamic.yml` - Traefik routing and middleware
+- `podman-compose.yml` - Main orchestration with Traefik labels
 - `keycloak/demo-realm.json` - Keycloak realm configuration
-- `app/server.js` - Demo application with OIDC
-- `traefik/certs/` - SSL certificates directory
+- `app/server.js` - Demo application with OIDC and proxy awareness
+- `app/keycloak.json` - Keycloak adapter configuration
 
-### Network Architecture
+### Modern Architecture
 
-- **web**: Main network for Traefik routing
-- **keycloak_internal**: Isolated network for Keycloak-DB communication
+- **No static config files**: Traefik uses Docker provider with container labels
+- **Auto-generated TLS**: No certificate management required
+- **Internal HTTP**: Services communicate via HTTP internally, HTTPS externally
+- **ISS Handling**: Proper token validation with X-Forwarded headers
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Certificate Errors**: Ensure certificates are generated and properly mounted
-2. **Authentication Fails**: Check Keycloak logs and realm configuration
-3. **502 Bad Gateway**: Verify all containers are running and healthy
-4. **DNS Resolution**: Ensure localhost resolves correctly (path-based routing eliminates subdomain requirements)
+1. **Certificate Warnings**: Browser will show self-signed certificate warnings - this is expected for development
+2. **Authentication Fails**: Check Keycloak logs: `podman logs keycloak`
+3. **502 Bad Gateway**: Verify all containers are running: `podman-compose ps`
+4. **ISS Mismatch**: The app handles this automatically with X-Forwarded headers and HTTP request interception
 
 ### Useful Commands
 
@@ -145,21 +142,52 @@ podman-compose logs -f [service_name]
 podman-compose restart [service_name]
 
 # Rebuild application
-podman-compose build [service_name]
+podman-compose build demo-app
 
 # Check container status
 podman ps -a
 
-# Test internal connectivity
-podman exec [container] ping [target_container]
+# Reset everything (including volumes)
+podman-compose down && podman volume prune -f && podman-compose up -d
 ```
 
-### Log Locations
+### Debug Steps
 
-- Traefik: `podman logs traefik`
-- Keycloak: `podman logs keycloak`
-- Demo App: `podman logs demo-app`
-- Database: `podman logs keycloak-db`
+```bash
+# Check Traefik routes
+curl -s http://localhost:8080/api/http/routers | jq
+
+# Test internal connectivity
+podman exec demo-app ping keycloak
+
+# View detailed logs
+podman logs demo-app --tail 50
+podman logs keycloak --tail 50
+```
+
+## Technical Details
+
+### Authentication Flow
+
+1. **User visits** `https://localhost/`
+2. **App checks** if user has valid Keycloak session
+3. **If not authenticated**: Shows login page with "Login with Keycloak" button
+4. **User clicks login**: Redirects to `/login` → Keycloak → back to `/` 
+5. **If authenticated**: Shows secured content with user profile and logout button
+
+### Proxy Configuration
+
+- **TLS Termination**: Traefik handles HTTPS termination and auto-generates certificates
+- **Internal Communication**: All containers communicate via HTTP on internal network
+- **ISS Consistency**: App intercepts HTTP requests to Keycloak and adds X-Forwarded headers
+- **Token Validation**: Proper ISS validation with proxy awareness
+
+### Modern Features
+
+- **Docker Provider**: No static Traefik config files, everything via container labels
+- **Auto-Generated TLS**: Development certificates created automatically by Traefik
+- **Single-Page Flow**: Simplified UX with one page handling both login and protected content
+- **Proxy-Aware Validation**: Proper token validation behind reverse proxy
 
 ## Development
 
@@ -171,66 +199,65 @@ podman exec [container] ping [target_container]
    podman-compose restart demo-app
    ```
 
-2. **Traefik Config**: Edit `traefik/config/dynamic.yml`, then restart:
+2. **Traefik Config**: Configuration is now in container labels in `podman-compose.yml`
    ```bash
-   podman-compose restart traefik
+   podman-compose up -d  # Apply label changes
    ```
 
-3. **Keycloak Realm**: Modify `keycloak/demo-realm.json`, then restart:
-   ```bash
-   podman-compose restart keycloak
-   ```
+3. **Keycloak Realm**: The realm is imported automatically from `keycloak/demo-realm.json`
 
 ### Adding New Services
 
 1. Add service definition to `podman-compose.yml`
-2. Configure Traefik routing in `dynamic.yml`
-3. Generate/mount appropriate certificates
-4. Add to `web` network for external access
+2. Add Traefik labels for routing:
+   ```yaml
+   labels:
+     - "traefik.enable=true"
+     - "traefik.http.routers.myservice.rule=PathPrefix(`/myservice`)"
+     - "traefik.http.services.myservice.loadbalancer.server.port=8080"
+   ```
+3. Add to `web` network for external access
 
-## Azure Deployment Readiness
+## Production Considerations
 
-This setup is specifically designed for Azure deployment compatibility:
+⚠️ **This setup uses auto-generated self-signed certificates and is intended for development/testing only.**
 
-### Path-Based Routing Benefits
-- **No subdomain requirements**: Works with single hostname constraints
-- **Azure Container Instances compatible**: Single port exposure (443)
-- **Azure App Service ready**: Path-based routing works within App Service constraints
-- **Load balancer friendly**: All traffic flows through single entry point
+### For Production Use
 
-### Azure Migration Considerations
-- Replace self-signed certificates with Azure Key Vault certificates
-- Use Azure Database for PostgreSQL instead of containerized database
-- Configure Azure Container Registry for image storage
-- Set up Azure Application Gateway for production load balancing
-- Use Azure Active Directory for production identity management
+**Security**:
+- Replace auto-generated certificates with proper CA-signed certificates or Let's Encrypt
+- Use proper secrets management (HashiCorp Vault, Kubernetes secrets, etc.)
+- Configure security headers and HSTS
+- Enable proper audit logging and monitoring
+- Use strong passwords and rotate secrets regularly
 
-## Security Considerations
+**Infrastructure**:
+- Use external PostgreSQL database (Azure Database, AWS RDS, etc.)
+- Implement proper backup and disaster recovery
+- Configure horizontal scaling for high availability
+- Use external load balancer for multi-instance deployments
 
-⚠️ **This setup uses self-signed certificates and is intended for development/testing only.**
+**Configuration**:
+- Set proper Keycloak realm configuration for production domains
+- Configure CORS and CSP policies
+- Enable rate limiting and DDoS protection
+- Use production-grade container orchestration (Kubernetes, etc.)
 
-For production use:
-- Replace self-signed certificates with proper CA-signed certificates
-- Use proper secrets management
-- Configure appropriate security headers
-- Enable proper logging and monitoring
-- Use strong passwords and secrets
+### Cloud Deployment
+
+This setup can be adapted for cloud deployment:
+
+- **Azure**: Use Azure Container Instances or AKS with Azure Key Vault for certificates
+- **AWS**: Deploy on ECS/EKS with ALB and ACM for certificates  
+- **Kubernetes**: Use cert-manager for automatic certificate provisioning
 
 ## Contributing
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+3. Test your changes thoroughly
+4. Submit a pull request with clear description
 
 ## License
 
 This project is provided as-is for educational and development purposes.
-
-## Support
-
-For issues and questions:
-- Check the troubleshooting section
-- Review container logs
-- Consult official documentation for Traefik, Keycloak, and Podman
