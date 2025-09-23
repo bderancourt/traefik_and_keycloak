@@ -1,7 +1,6 @@
 const express = require('express');
 const session = require('express-session');
 const Keycloak = require('keycloak-connect');
-const http = require('http');
 
 const app = express();
 const port = process.env.HTTP_PORT || 3000;
@@ -12,60 +11,124 @@ app.set('trust proxy', true);
 // Session configuration
 const memoryStore = new session.MemoryStore();
 app.use(session({
-  secret: 'some-secret',
+  secret: process.env.SESSION_SECRET || 'some-secret-key-change-in-production',
   resave: false,
   saveUninitialized: true,
-  store: memoryStore
+  store: memoryStore,
+  cookie: {
+    secure: false, // Set to true if you want HTTPS-only cookies
+    maxAge: 30 * 60 * 1000 // 30 minutes
+  }
 }));
 
-// Keycloak configuration for HTTP internal communication with HTTPS external access
-const keycloakConfig = {
-  realm: process.env.KEYCLOAK_REALM || 'demo',
-  'auth-server-url': process.env.KEYCLOAK_INTERNAL_URL || 'http://keycloak:8080/keycloak',
-  'ssl-required': 'external',
-  resource: process.env.KEYCLOAK_CLIENT_ID || 'demo-app',
-  credentials: {
-    secret: process.env.KEYCLOAK_CLIENT_SECRET || 'demo-app-secret'
-  },
-  'confidential-port': 0,
-  'token-store': 'session',
-  'bearer-only': false,
-  'verify-token-audience': false,
-  'public-client': false
+// Initialize Keycloak configuration with external URL for consistency
+const keycloakConfigOriginal = require('./keycloak.json');
+const internalUrl = process.env.KEYCLOAK_INTERNAL_URL || 'http://keycloak:8080/keycloak';
+const externalUrl = keycloakConfigOriginal['auth-server-url'];
+
+console.log('[KEYCLOAK CONFIG] External URL (for consistency):', externalUrl);
+console.log('[KEYCLOAK CONFIG] Internal URL (for connection):', internalUrl);
+
+// Use external URL for Keycloak configuration to maintain ISS consistency
+const keycloak = new Keycloak({ 
+  store: memoryStore 
+}, keycloakConfigOriginal); // Keep original config with external URL
+
+console.log('[KEYCLOAK CONFIG] Keycloak initialized with URL:', keycloak.grantManager.realmUrl);
+
+// Override HTTP requests to redirect internal calls to the internal service
+const http = require('http');
+const https = require('https');
+const originalHttpRequest = http.request;
+const originalHttpsRequest = https.request;
+
+// Intercept HTTP requests to Keycloak and redirect to internal service
+http.request = function(options, callback) {
+  if (typeof options === 'string') {
+    options = new URL(options);
+  }
+  
+  // Redirect external Keycloak URLs to internal service
+  if (options.hostname === 'localhost' && options.path && options.path.includes('/keycloak')) {
+    console.log('[KEYCLOAK] Redirecting HTTP request from external to internal service');
+    options.hostname = 'keycloak';
+    options.port = 8080;
+    options.protocol = 'http:';
+    
+    // Add forwarded headers so Keycloak knows the original external context
+    if (!options.headers) options.headers = {};
+    options.headers['X-Forwarded-Proto'] = 'https';
+    options.headers['X-Forwarded-Host'] = 'localhost';
+    options.headers['X-Forwarded-Port'] = '443';
+    options.headers['X-Forwarded-For'] = '127.0.0.1';
+    console.log('[KEYCLOAK] Added forwarded headers for backend validation');
+  }
+  
+  return originalHttpRequest.call(this, options, callback);
 };
 
-const keycloak = new Keycloak({ store: memoryStore }, keycloakConfig);
-
-// Custom grant manager to handle issuer mismatch
-const originalGrantManager = keycloak.grantManager;
-keycloak.grantManager.validateToken = function(token, expectedType) {
-  // Override the token validation to be more flexible about issuer
-  const originalValidateToken = originalGrantManager.validateToken.bind(this);
-  return originalValidateToken(token, expectedType).catch(err => {
-    if (err.message && err.message.includes('wrong ISS')) {
-      // If it's an ISS error, try to validate with a more flexible approach
-      console.log('Handling ISS mismatch, attempting flexible validation');
-      return Promise.resolve(); // Accept the token despite ISS mismatch
-    }
-    throw err;
-  });
+https.request = function(options, callback) {
+  if (typeof options === 'string') {
+    options = new URL(options);
+  }
+  
+  // Redirect external Keycloak URLs to internal service
+  if (options.hostname === 'localhost' && options.path && options.path.includes('/keycloak')) {
+    console.log('[KEYCLOAK] Redirecting HTTPS request from external to internal service');
+    options.hostname = 'keycloak';
+    options.port = 8080;
+    options.protocol = 'http:';
+    
+    // Add forwarded headers so Keycloak knows the original external context
+    if (!options.headers) options.headers = {};
+    options.headers['X-Forwarded-Proto'] = 'https';
+    options.headers['X-Forwarded-Host'] = 'localhost';
+    options.headers['X-Forwarded-Port'] = '443';
+    options.headers['X-Forwarded-For'] = '127.0.0.1';
+    console.log('[KEYCLOAK] Added forwarded headers for backend validation');
+    
+    // Use HTTP instead of HTTPS for internal communication
+    return originalHttpRequest.call(this, options, callback);
+  }
+  
+  return originalHttpsRequest.call(this, options, callback);
 };
 
-// Middleware to intercept Keycloak redirects and replace internal URLs with public URLs
+// Enhanced logging for Keycloak operations
+const originalObtainFromCode = keycloak.grantManager.obtainFromCode.bind(keycloak.grantManager);
+
+keycloak.grantManager.obtainFromCode = function(...args) {
+  console.log('[KEYCLOAK] obtainFromCode - using realmUrl:', this.realmUrl);
+  return originalObtainFromCode(...args)
+    .then(result => {
+      console.log('[KEYCLOAK] obtainFromCode success:', {
+        access_token: result.access_token ? 'present' : 'missing',
+        refresh_token: result.refresh_token ? 'present' : 'missing'
+      });
+      return result;
+    })
+    .catch(error => {
+      console.error('[KEYCLOAK] obtainFromCode error:', error.message);
+      throw error;
+    });
+};
+
+// Set up Keycloak middleware
+app.use(keycloak.middleware({
+  logout: '/logout',
+  admin: '/'
+}));
+
+// Enhanced middleware to log all requests
 app.use((req, res, next) => {
-  const originalRedirect = res.redirect;
-  res.redirect = function(url) {
-    // Replace internal Keycloak URLs with public URLs for browser redirects
-    if (typeof url === 'string' && url.includes('keycloak:8080/keycloak')) {
-      url = url.replace('http://keycloak:8080/keycloak', 'https://localhost/keycloak');
-    }
-    return originalRedirect.call(this, url);
-  };
+  console.log('[KEYCLOAK MIDDLEWARE] Processing request:', req.path);
+  if (req.kauth && req.kauth.grant) {
+    console.log('[KEYCLOAK MIDDLEWARE] User authenticated with grant');
+  } else {
+    console.log('[KEYCLOAK MIDDLEWARE] No authentication found');
+  }
   next();
 });
-
-// Initialize Keycloak
-app.use(keycloak.middleware());
 
 // Set view engine
 app.set('view engine', 'ejs');
@@ -73,23 +136,32 @@ app.set('views', './views');
 
 // Routes
 app.get('/', (req, res) => {
-  const user = req.kauth && req.kauth.grant && req.kauth.grant.access_token ? 
-               req.kauth.grant.access_token.content : null;
-  res.render('index', { user });
+  if (req.kauth && req.kauth.grant) {
+    // User is authenticated - show protected content
+    res.render('index', {
+      user: req.kauth.grant.access_token.content,
+      authenticated: true
+    });
+  } else {
+    // User is not authenticated - show login page
+    res.render('index', {
+      user: null,
+      authenticated: false
+    });
+  }
 });
 
-app.get('/protected', keycloak.protect(), (req, res) => {
-  const user = req.kauth && req.kauth.grant && req.kauth.grant.access_token ? 
-               req.kauth.grant.access_token.content : null;
-  res.render('protected', { user });
+app.get('/login', keycloak.protect(), (req, res) => {
+  // If we reach here, user is authenticated
+  res.redirect('/');
 });
 
 app.get('/logout', (req, res) => {
+  delete req.session['keycloak-token'];
   req.logout();
   res.redirect('/');
 });
 
-// HTTP server (SSL termination handled by Traefik)
-app.listen(port, '0.0.0.0', () => {
+app.listen(port, () => {
   console.log(`Demo app listening on HTTP port ${port}`);
 });

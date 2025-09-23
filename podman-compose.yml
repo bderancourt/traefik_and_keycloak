@@ -9,9 +9,8 @@ services:
       - --api.dashboard=true
       - --api.debug=true
       - --log.level=DEBUG
-      #- --providers.docker=true
-      - --providers.file.directory=/config
-      - --providers.file.watch=true
+      - --providers.docker=true
+      - --providers.docker.exposedByDefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
@@ -20,8 +19,23 @@ services:
     ports:
       - "443:443"
     volumes:
-      - ./traefik/config:/config:ro
-      - ./traefik/certs:/certs:ro
+      - /run/user/1000/podman/podman.sock:/var/run/docker.sock:ro
+    labels:
+      # Traefik dashboard accessible at /traefik/
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=PathPrefix(`/traefik`)"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.service=api@internal"
+      - "traefik.http.routers.traefik.middlewares=traefik-stripprefix"
+      # Strip /traefik prefix for dashboard
+      - "traefik.http.middlewares.traefik-stripprefix.stripPrefix.prefixes=/traefik"
+      # Direct API access
+      - "traefik.http.routers.traefik-api.rule=PathPrefix(`/api`)"
+      - "traefik.http.routers.traefik-api.entrypoints=websecure"
+      - "traefik.http.routers.traefik-api.tls=true"
+      - "traefik.http.routers.traefik-api.service=api@internal"
+      - "traefik.http.routers.traefik-api.priority=100"
     networks:
       - web
 
@@ -29,7 +43,10 @@ services:
     image: docker.io/keycloak/keycloak:latest
     container_name: keycloak
     restart: unless-stopped
-    command: start-dev --import-realm
+    command: 
+      - start-dev
+      - --import-realm
+      - --log-level=INFO
     volumes:
       - ./keycloak/demo-realm.json:/opt/keycloak/data/import/demo-realm.json:ro
       - keycloak-data:/opt/keycloak/data
@@ -40,9 +57,21 @@ services:
       KC_HTTP_RELATIVE_PATH: "/keycloak"
       KC_HTTP_ENABLED: "true"
       KC_HTTP_PORT: 8080
-      KC_PROXY_HEADERS: xforwarded
-      KC_ADMIN: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Tell Keycloak it's behind an edge proxy so it reconstructs external URLs from Forwarded headers
+      KC_PROXY_HEADERS: forwarded
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      # Enable only HTTP request/response logging
+      KC_LOG_LEVEL: DEBUG
+      
+    labels:
+      # Keycloak accessible at /keycloak/
+      - "traefik.enable=true"
+      - "traefik.http.routers.keycloak.rule=PathPrefix(`/keycloak`)"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.routers.keycloak.service=keycloak"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
     networks:
       - web
 
@@ -60,6 +89,15 @@ services:
       KEYCLOAK_CLIENT_ID: demo-app
       KEYCLOAK_CLIENT_SECRET: demo-app-secret
       HTTP_PORT: 3000
+    labels:
+      # Demo app accessible at root / (catch-all for non-keycloak, non-traefik paths)
+      - "traefik.enable=true"
+      - "traefik.http.routers.demo-app.rule=!PathPrefix(`/keycloak`) && !PathPrefix(`/traefik`) && !PathPrefix(`/api`)"
+      - "traefik.http.routers.demo-app.entrypoints=websecure"
+      - "traefik.http.routers.demo-app.tls=true"
+      - "traefik.http.routers.demo-app.service=demo-app"
+      - "traefik.http.routers.demo-app.priority=1"
+      - "traefik.http.services.demo-app.loadbalancer.server.port=3000"
     networks:
       - web
 

@@ -1,0 +1,10 @@
+{
+    "realm": "demo",
+    "auth-server-url": "https://localhost/keycloak",
+    "ssl-required": "external",
+    "resource": "demo-app",
+    "credentials": {
+        "secret": "demo-app-secret"
+    },
+    "confidential-port": 0
+}

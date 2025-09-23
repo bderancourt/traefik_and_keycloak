@@ -1,31 +1,84 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Keycloak Demo App</title>
+    <title>OIDC Demo - Traefik + Keycloak</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 800px; margin: 0 auto; }
-        .btn { padding: 10px 20px; margin: 10px; text-decoration: none; background: #007bff; color: white; border-radius: 5px; }
-        .info { background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        body { font-family: Arial, sans-serif; margin: 40px; background: #f8f9fa; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .login-btn { 
+            display: inline-block;
+            padding: 15px 30px; 
+            margin: 20px 0; 
+            text-decoration: none; 
+            background: #007bff; 
+            color: white; 
+            border-radius: 5px; 
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        .login-btn:hover { background: #0056b3; }
+        .logout-btn { 
+            display: inline-block;
+            padding: 10px 20px; 
+            margin-top: 20px; 
+            text-decoration: none; 
+            background: #dc3545; 
+            color: white; 
+            border-radius: 5px; 
+        }
+        .logout-btn:hover { background: #c82333; }
+        .info { background: #e9ecef; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        .user-info { background: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745; }
+        .success { color: #28a745; }
+        .welcome { color: #6c757d; margin-bottom: 30px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Keycloak Demo Application</h1>
-        
-        <% if (user) { %>
-            <div class="info">
-                <h3>Welcome, <%= user.preferred_username %>!</h3>
-                <p>Email: <%= user.email %></p>
-                <p>You are successfully authenticated with Keycloak.</p>
+        <% if (authenticated && user) { %>
+            <!-- Authenticated state - Protected content -->
+            <h1 class="success">🎉 Welcome to the Secured Area!</h1>
+            
+            <div class="user-info">
+                <h3>Your Profile Information</h3>
+                <p><strong>Username:</strong> <%= user.preferred_username || 'N/A' %></p>
+                <p><strong>Email:</strong> <%= user.email || 'N/A' %></p>
+                <p><strong>Full Name:</strong> <%= user.name || user.given_name + ' ' + user.family_name || 'N/A' %></p>
+                <p><strong>Subject ID:</strong> <%= user.sub || 'N/A' %></p>
+                <% if (user.realm_access && user.realm_access.roles) { %>
+                <p><strong>Roles:</strong> <%= user.realm_access.roles.join(', ') %></p>
+                <% } %>
             </div>
-            <a href="/protected" class="btn">Visit Protected Page</a>
-            <a href="/logout" class="btn" style="background: #dc3545;">Logout</a>
+
+            <div class="info">
+                <h3>🔒 Authentication Status</h3>
+                <ul>
+                    <li>✅ Successfully authenticated via Keycloak OIDC</li>
+                    <li>✅ Token validated with proper ISS handling</li>
+                    <li>✅ Routed through Traefik reverse proxy</li>
+                    <li>✅ Session secured and maintained</li>
+                </ul>
+                <p><small><strong>Technical:</strong> X-Forwarded headers ensure proper proxy-aware token validation</small></p>
+            </div>
+
+            <a href="/logout" class="logout-btn">🚪 Logout</a>
+            
         <% } else { %>
+            <!-- Non-authenticated state - Login page -->
+            <h1>🔐 OIDC Authentication Demo</h1>
+            <p class="welcome">This demo showcases secure authentication using <strong>Keycloak OIDC</strong> through <strong>Traefik</strong> reverse proxy.</p>
+            
             <div class="info">
-                <p>You are not logged in. Click the button below to authenticate with Keycloak.</p>
+                <h3>Architecture Overview</h3>
+                <ul>
+                    <li><strong>Traefik:</strong> Reverse proxy with automatic HTTPS</li>
+                    <li><strong>Keycloak:</strong> Identity Provider with OIDC support</li>
+                    <li><strong>Demo App:</strong> Node.js Express with keycloak-connect</li>
+                </ul>
             </div>
-            <a href="/protected" class="btn">Login with Keycloak</a>
+
+            <p>Click below to authenticate and access the secured area:</p>
+            <a href="/login" class="login-btn">🔑 Login with Keycloak</a>
         <% } %>
     </div>
 </body>
