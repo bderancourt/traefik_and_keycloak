@@ -48,6 +48,24 @@ A complete containerized setup using Podman Compose with Traefik as reverse prox
 - Podman with podman-compose (or Docker with docker-compose)
 - No certificate generation required - Traefik handles everything automatically
 
+#### Podman Daemon Setup
+
+For podman-compose to work properly, ensure Podman is running in daemon mode:
+
+```bash
+# Enable and start Podman socket service (run as regular user, NOT root)
+systemctl --user enable podman.socket
+systemctl --user start podman.socket
+
+# Verify the socket is running
+systemctl --user status podman.socket
+
+# Optional: Check socket path (should show /run/user/$(id -u)/podman/podman.sock)
+podman info --format json | jq -r '.host.remoteSocket.path'
+```
+
+> **Important**: These commands use `--user` flag and should be run as your **regular user**, NOT as root. The socket will be automatically available at `/run/user/$(id -u)/podman/podman.sock` for the current user. This is required for podman-compose to communicate with the Podman daemon.
+
 ### 1. Environment Setup
 
 Create a `.env` file:
